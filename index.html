@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Field Day</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #7fc8f8; }
+  body { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #fff; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
+  [hidden] { display: none !important; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 4px #0008; }
+  #top { top: max(8px, env(safe-area-inset-top)); left: 0; right: 0; text-align: center; }
+  #top b { display: inline-block; padding: 4px 14px; border-radius: 12px; background: #13294bd8; font: 900 17px system-ui, sans-serif; letter-spacing: .06em; text-shadow: none; }
+  #top small { display: block; margin-top: 3px; font: 700 13px system-ui, sans-serif; }
+  #clock { top: calc(max(8px, env(safe-area-inset-top)) + 4px); right: max(12px, env(safe-area-inset-right)); font: 900 22px system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  #cd { top: 32%; left: 0; right: 0; text-align: center; font: 900 min(26vw, 140px)/1 system-ui, sans-serif; color: #ffd23f; -webkit-text-stroke: 3px #13294b; opacity: 0; transform: scale(.6); transition: opacity .12s, transform .25s cubic-bezier(.2, 1.7, .4, 1); }
+  #cd.on { opacity: 1; transform: scale(1); }
+  #msg { top: 24%; left: 0; right: 0; text-align: center; padding: 0 12px; font: 900 min(10vw, 50px)/1.05 system-ui, sans-serif; -webkit-text-stroke: 2px #13294b; opacity: 0; transition: opacity .2s; }
+  #msg.on { opacity: 1; }
+  #msg small { display: block; margin-top: 6px; font: 800 17px system-ui, sans-serif; -webkit-text-stroke: 0; color: #fff; }
+  #hint { left: 0; right: 0; text-align: center; font: 800 17px system-ui, sans-serif; color: #ffd23f; padding: 0 12px; transition: opacity .6s; }
+  #net { bottom: max(4px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); font-size: 12px; opacity: .85; white-space: nowrap; }
+  #pads { position: fixed; left: 0; right: 0; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 18px); display: flex; justify-content: space-between; align-items: flex-end; padding: 0 max(12px, env(safe-area-inset-left)); touch-action: none; }
+  #pads button { width: 96px; height: 96px; border-radius: 50%; border: 3px solid #ffffffb0; background: #13294bb8; color: #fff; font: 900 26px system-ui, sans-serif; touch-action: none; }
+  #pads button.on { background: #ffd23f; color: #3a2000; }
+  #pads #bAct { width: 104px; height: 64px; border-radius: 18px; font-size: 17px; background: #e8453cc8; margin-bottom: 16px; }
+  #res { position: fixed; top: calc(max(8px, env(safe-area-inset-top)) + 58px); left: 50%; transform: translateX(-50%); box-sizing: border-box; width: min(340px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 14px; background: #13294bec; border: 1px solid #ffffff30; pointer-events: none; }
+  #res h3 { margin: 0 0 6px; text-align: center; font: 900 15px system-ui, sans-serif; color: #ffd23f; letter-spacing: .05em; }
+  #res ol { margin: 0; padding-left: 22px; font: 700 13px/1.55 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  #res li span { float: right; } #res li em { font-style: normal; color: #7cf29a; margin-left: 6px; } #res li.me { color: #ffd23f; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center; background: #0a1a33b0; }
+  .card { box-sizing: border-box; width: min(380px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; padding: 18px; border-radius: 16px; background: #13294b; border: 1px solid #ffffff26; text-align: center; }
+  .card h2 { margin: 0 0 8px; font-size: 26px; }
+  .card h3 { margin: 14px 0 4px; font-size: 14px; color: #ffd23f; text-align: left; }
+  .podium { display: flex; justify-content: center; align-items: flex-end; gap: 8px; height: 132px; }
+  .podium div { flex: 1; max-width: 100px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+  .podium i { width: 26px; height: 26px; border-radius: 50%; border: 3px solid #fff; margin-bottom: 4px; }
+  .podium b { font: 800 12px system-ui, sans-serif; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .podium span { display: grid; place-items: center; width: 100%; border-radius: 8px 8px 0 0; font: 900 22px system-ui, sans-serif; color: #13294b; margin-top: 4px; }
+  table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 3px 4px; text-align: right; } th { color: #9fb6e0; font-weight: 700; }
+  td:first-child, th:first-child { text-align: left; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; } tr.me td { color: #ffd23f; font-weight: 700; }
+  .card ol { text-align: left; margin: 0; padding-left: 26px; font-size: 14px; min-height: 22px; } .card li span { float: right; font-variant-numeric: tabular-nums; }
+  .card p { margin: 8px 0 0; font-size: 13px; opacity: .8; }
+  button.again { width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 12px; background: #ffd23f; color: #3a2000; font: 800 17px system-ui, sans-serif; cursor: pointer; }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud" id="top"><b id="title">FIELD DAY</b><small id="sub"></small></div>
+<div class="hud" id="clock"></div>
+<div class="hud" id="cd"></div>
+<div class="hud" id="msg"></div>
+<div class="hud" id="hint"></div>
+<div class="hud" id="net">Connecting…</div>
+<div id="pads" hidden><button id="bL">L</button><button id="bAct">JUMP</button><button id="bR">R</button></div>
+<div id="res" hidden><h3 id="resTitle"></h3><ol id="resList"></ol></div>
+<div id="over" hidden><div class="card">
+  <h2 id="winner"></h2>
+  <div class="podium" id="podium"></div>
+  <table id="totals"></table>
+  <h3>Fastest 100m</h3><ol id="board"><li>Loading…</li></ol>
+  <button class="again" id="again">Play again</button><p id="next"></p>
+</div></div>
+<script>
+/* ═══ FIELD DAY · a Multiplayer Agent starter ═══════════════════════════════════════════════
+ * A track meet for 2–8 players in side-by-side lanes: the 100m dash, the hurdles and the javelin,
+ * back to back. Alternate two keys (or two buttons) as fast as you can to run. Jump the hurdles on
+ * time. Hold to raise the javelin's angle, let go before the foul line. Points per event (5, 3, 2,
+ * then 1 for finishing), medals for the top three overall. Bots fill the empty lanes.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ timers, running (boost per step, top speed), hurdles, javelin, points, bots
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host, the host's clock
+ *   ATHLETE ....... the physics every athlete shares (yours and the bots'): steps, jumps, the throw
+ *   MEET (HOST) ... lanes, starting each event, collecting results, points, the podium. Only the host.
+ *   BOTS .......... how bots mash, jump and throw (human-like rates, the odd mistake)
+ *   ME ............ my athlete: my steps, my jump, my throw, sending my lane and my result
+ *   VIEWS ......... everyone else's athletes, eased between writes
+ *   DRAW .......... sky, stands, the lanes, hurdles, the javelin field, athletes, the progress strip
+ *   HUD & RESULTS . event title, countdown, the clock, event results, the medal card, leaderboard
+ *   INPUT ......... keyboard, and L / R / JUMP-THROW buttons on touch
+ *   MAIN LOOP ..... one frame: host work, my athlete, drawing
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - Each player runs its OWN athlete on its own screen and writes `a` {g, e, x, v, j, s, k, an, xr, v0, tt}
+ *     (meet id, event, metres, speed, jump height, state, hurdles knocked, javelin angle and throw)
+ *     about 12 times a second, and `r` {g, e, t | d} once, the moment it finishes (its time in ms,
+ *     measured on the host's clock from the starting gun) or throws (metres). Plus `hb` (heartbeat)
+ *     once a second, `n`/`c` (name, color) once and `rdy` (Play again).
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s), worked out
+ *     every frame. Only the host writes the shared fields:
+ *       `meet` {id, v, phase, ev, lanes, startAt, res, place, pts, nm, at}: who is in which lane (sessionIds
+ *              or bots "b1".."b8"), the event, the starting gun (a timestamp), this event's results, the
+ *              finishing order and everyone's points. `v` goes up on every write.
+ *       `bots` [{id, x, y, v, j, s, k, an, xr, v0, tt}]: the bot athletes, ~10 times a second.   `clk`: its clock.
+ *   - The host checks each result is possible (nobody runs 100m in 5 seconds), ends the event when every
+ *     lane is home (or the clock runs out), and hands out the points. A new host adopts `meet` and
+ *     `bots` and carries on from the same timestamps.
+ *   - Someone who joins takes a bot's lane (or a free one) at the next event; a leaver's lane goes to a bot.
+ *   - ?attract plays offline, bots only, starting with the hurdles (the preview video is recorded from it).
+ *   - Leaderboard "dash-100m": your fastest 100m (sent as 100000 - ms, so higher is better).
+ */
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  events: ["dash", "hurdles", "javelin"], // in this order
+  introMs: 2600,          // the meet's title card
+  countdownMs: 3000,      // 3, 2, 1, GO
+  resultMs: 5000,         // an event's results stay up this long
+  podiumMs: 16000,        // the medal card before the next meet (Play again skips it)
+  capMs: { dash: 18000, hurdles: 22000, javelin: 12000 }, // an event ends this long after the gun at the latest
+  minLanes: 4, maxLanes: 8,
+  trackLen: 100,          // metres to the finish (dash and hurdles)
+  // Running: every step on the OTHER foot adds speed; it bleeds away when you stop.
+  boost: 1.05,            // m/s per good step
+  decay: 0.85,            // speed lost per second (a share of it)
+  vmax: 11.8,             // m/s
+  wrongFoot: 0.93,        // the same foot twice: you stumble (speed × this)
+  // Hurdles
+  hurdles: [15, 24.5, 34, 43.5, 53, 62.5, 72, 81.5], // metres
+  jumpV: 4.4, gravity: 18, // jump speed up, and a heavy gravity (a quick hop)
+  clearH: 0.25,           // your feet must be this high (m) as you pass a hurdle
+  knockKeep: 0.45,        // hitting a hurdle keeps this much of your speed
+  // Javelin: run up, hold to plant and raise the angle, let go before the line
+  foulLine: 28,           // metres
+  angleRate: 85,          // degrees per second while held
+  plantDecay: 3.2,        // how fast you slow down while aiming
+  throwK: 2.3, throwBase: 4, // release speed = run-up speed × K + base
+  points: [5, 3, 2],      // 1st, 2nd, 3rd; everyone else who finishes gets 1
+  // Bots
+  botTaps: [6.2, 9.4],    // steps per second: the slowest bot, the fastest
+  botJumpErr: 0.09,       // spread of a bot's jump timing (s)
+  botAngle: 41, botAngleErr: 7, // degrees
+  sendMs: 80,             // my athlete ~12 times a second
+  botSendMs: 100,
+  attractEvent: 1,        // the preview starts with the hurdles
+  board: "dash-100m",
+};
+const EVENTS = {
+  dash: { name: "100M DASH", hint: "Alternate ← → as fast as you can!", touch: "Tap L and R in turn, as fast as you can!" },
+  hurdles: { name: "HURDLES", hint: "Alternate ← → to run, Space to jump each hurdle", touch: "Tap L and R in turn, JUMP at each hurdle" },
+  javelin: { name: "JAVELIN", hint: "Run up with ← →, hold Space to aim, let go before the red line!", touch: "Run with L and R, hold THROW to aim, let go before the red line!" },
+};
+const COLORS = ["#ff5d8f", "#ffd23f", "#3a86ff", "#06d6a0", "#b388ff", "#ff9f1c", "#8ac926", "#f15bb5"]; // each athlete's vest
+const BOT_NAMES = ["Zippy", "Bolt Jr", "Flash", "Sprinty", "Hopper", "Rocket", "Dasher", "Comet"]; // bot "b1" is Zippy
+const MEDALS = ["#ffd23f", "#d6dde6", "#e0915a"];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'field-day',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+const memo = new Map();
+/** A JSON field, parsed once per change (read-only: never mutate what this returns). */
+function cached(key, raw, fb) { const m = memo.get(key); if (m && m.raw === raw) return m.v; const v = parse(raw, fb); memo.set(key, { raw, v }); return v; }
+let net = null, S = { entities: { players: {} }, shared: {} };
+const seenHb = new Map();
+/** Players whose heartbeat moved in the last 3s (plus us), sorted by sessionId. */
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+let frameAt = 0, wokeAt = -1e9; // my loop's last frame, and when it last woke from a stall (a frozen or background tab)
+/** Never while my own loop is stalled, nor for 0.7s after it wakes: the room moved on without me, so the newer state lands first. */
+const isHost = () => livePlayers()[0] === net.sessionId && performance.now() - frameAt < 1000 && performance.now() - wokeAt > 700;
+const humans = () => livePlayers().filter((id) => !(ATTRACT && id === net.sessionId)); // in the preview you only watch
+/** The host's clock: it writes `clk` twice a second; we keep the smallest delay seen lately. */
+const clock = { off: 0, samples: [], last: null };
+function noteHostClock() {
+  const w = S.shared.clk;
+  if (typeof w !== "number" || w === clock.last) return;
+  clock.last = w;
+  const now = performance.now();
+  clock.samples.push({ at: now, d: w - Date.now() });
+  while (clock.samples.length && now - clock.samples[0].at > 5000) clock.samples.shift();
+  clock.off = Math.max(...clock.samples.map((s) => s.d));
+}
+const hostNow = () => Date.now() + (net.offline || isHost() ? 0 : clock.off);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const r2 = (v) => Math.round(v * 100) / 100;
+const isBot = (id) => /^b\d+$/.test(id || "");
+const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+
+// ── ATHLETE ─────────────────────────────────────────────────────────────────────────
+// An athlete: x (metres from the start), v (m/s), j (jump height), s (state), k (hurdles knocked, bits),
+// an (javelin angle), and once thrown: xr (where), v0 (release speed), tt (when, host clock).
+const RUN = 0, AIR = 1, AIM = 2, THROWN = 3, DONE = 4, FOUL = 5;
+const newAthlete = () => ({ x: 0, v: 0, j: 0, vj: 0, s: RUN, k: 0, an: 0, vp: 0, xr: 0, v0: 0, tt: 0, fin: 0, foot: "", steps: 0 });
+/** One step on foot "L" or "R": the other foot adds speed, the same foot twice stumbles. */
+function stepFoot(a, foot) {
+  if (a.s !== RUN) return false;
+  if (foot === a.foot) { a.v *= CONFIG.wrongFoot; return false; }
+  a.foot = foot; a.v = Math.min(CONFIG.vmax, a.v + CONFIG.boost); a.steps++;
+  return true;
+}
+function jump(a) { if (a.s === RUN) { a.s = AIR; a.vj = CONFIG.jumpV; return true; } return false; }
+function startAim(a) { if (a.s === RUN || a.s === AIR) { a.s = AIM; a.vp = a.v; a.an = 8; return true; } return false; }
+/** Let go of the javelin: the release speed comes from the run-up; the angle from how long you held. */
+function release(a, T) {
+  if (a.s !== AIM) return;
+  if (a.x > CONFIG.foulLine) { a.s = FOUL; return; }
+  a.s = THROWN; a.xr = r2(a.x); a.v0 = r2(a.vp * CONFIG.throwK + CONFIG.throwBase); a.tt = Math.round(T);
+}
+/** The javelin's distance (metres) from a throw: speed v0 at `an` degrees. */
+const throwDist = (v0, an) => (v0 * v0 * Math.sin((2 * an * Math.PI) / 180)) / 9.8;
+/** Move an athlete dt seconds. Returns "knock" when it clips a hurdle, "finish", "foul", or "". T = host clock. */
+function moveAthlete(a, dt, ev, T) {
+  const K = CONFIG, x0 = a.x;
+  let out = "";
+  if (a.s === AIM) { a.v *= Math.exp(-K.plantDecay * dt); a.an = Math.min(80, a.an + K.angleRate * dt); }
+  else if (a.s >= THROWN) a.v *= Math.exp(-2.5 * dt); // jog it out
+  else a.v *= Math.exp(-K.decay * dt * (a.s === AIR ? 0.4 : 1));
+  a.x += a.v * dt;
+  if (a.s === AIR) { a.j += a.vj * dt; a.vj -= K.gravity * dt; if (a.j <= 0) { a.j = 0; a.vj = 0; a.s = RUN; } }
+  if (ev === "hurdles") K.hurdles.forEach((h, i) => {
+    if (x0 < h && a.x >= h && !(a.k & (1 << i)) && a.j < K.clearH) { a.k |= 1 << i; a.v *= K.knockKeep; out = "knock"; }
+  });
+  if (ev !== "javelin" && a.s !== DONE && a.x >= K.trackLen && x0 < K.trackLen) { a.fin = Math.round(T - ((a.x - K.trackLen) / Math.max(0.1, a.v)) * 1000); a.s = DONE; out = "finish"; }
+  if (ev === "javelin" && (a.s === RUN || a.s === AIR || a.s === AIM) && a.x > K.foulLine + 0.4) { a.s = FOUL; out = "foul"; }
+  return out;
+}
+/** The javelin in the air: { x, y, ang } at host time T, or null. */
+function javelinAt(a, T) {
+  if (!a || a.s !== THROWN || !a.tt) return null;
+  const th = (a.an * Math.PI) / 180, e = Math.max(0, (T - a.tt) / 1000), vx = a.v0 * Math.cos(th), vy = a.v0 * Math.sin(th), fl = (2 * vy) / 9.8;
+  const t = Math.min(e, fl), y = 1.8 + vy * t - 4.9 * t * t;
+  return { x: a.xr + vx * t, y: Math.max(0, y), ang: Math.atan2(vy - 9.8 * t, vx), landed: e >= fl };
+}
+
+// ── MEET (HOST) ─────────────────────────────────────────────────────────────────────
+const host = { last: null, wasHost: false, bots: new Map(), lastBots: 0, lastClk: 0, botsJson: "" };
+/** The meet as state has it, or the host's own newer write that hasn't come back yet. `v` only goes up. */
+function meet() {
+  const g = cached("meet", S.shared.meet, null);
+  return host.last && isHost() && (!g || host.last.v > g.v) ? host.last : g;
+}
+function writeMeet(g) {
+  const shared = cached("meet", S.shared.meet, null);
+  g = { ...g, v: Math.max(meet()?.v ?? 0, shared?.v ?? 0) + 1 }; // never below what is in state
+  host.last = g; net.setShared("meet", JSON.stringify(g)); return g;
+}
+/** Become host: take over the meet and the bots exactly as state has them. */
+function adopt() {
+  host.wasHost = true; host.last = null; host.bots.clear(); host.botsJson = "";
+  for (const b of cached("bots", S.shared.bots, []) || []) if (b && isBot(b.id)) host.bots.set(b.id, { ...newAthlete(), ...b, id: b.id, ...botBrain() });
+}
+const nameOf = (id) => !id ? "Someone" : id === net.sessionId ? myName : isBot(id) ? BOT_NAMES[(+id.slice(1) - 1) % BOT_NAMES.length] : String((S.entities.players[id] || {}).n || (meet()?.nm || {})[id] || "Player");
+const evName = (g) => CONFIG.events[g.ev] || "dash";
+/** Lanes: everyone still here keeps theirs; a leaver's lane goes to a bot; a newcomer takes a bot's lane or a free one. */
+function arrangeLanes(lanes) {
+  const people = humans(), out = lanes.map((id) => (isBot(id) || people.includes(id) ? id : null));
+  for (const id of people) {
+    if (out.includes(id)) continue;
+    let i = out.indexOf(null); if (i < 0) i = out.findIndex(isBot);
+    if (i >= 0) out[i] = id; else if (out.length < CONFIG.maxLanes) out.push(id);
+  }
+  while (out.length < CONFIG.minLanes) out.push(null);
+  const used = new Set(out.filter(Boolean));
+  return out.map((id) => { if (id) return id; let k = 1; while (used.has("b" + k)) k++; used.add("b" + k); return "b" + k; });
+}
+function newMeet(id, T) {
+  const people = humans().sort(() => Math.random() - 0.5).slice(0, CONFIG.maxLanes);
+  const lanes = arrangeLanes(ATTRACT ? [null, null, null, null, null] : people);
+  return { id, phase: "intro", ev: ATTRACT ? CONFIG.attractEvent : 0, lanes, startAt: 0, at: T + CONFIG.introMs, res: {}, place: [], pts: {}, nm: {} };
+}
+/** The next event: lanes settled, fresh bots, and the starting gun countdownMs from now. */
+function startEvent(g, ev, T) {
+  const lanes = arrangeLanes(g.lanes), nm = { ...g.nm };
+  for (const id of lanes) nm[id] = nameOf(id);
+  host.bots.clear();
+  for (const id of lanes) if (isBot(id)) host.bots.set(id, { ...newAthlete(), id, ...botBrain() });
+  return writeMeet({ ...g, phase: "race", ev, lanes, nm, startAt: T + CONFIG.countdownMs, res: {}, place: [] });
+}
+/** A player's result for this event, if it is in (and possible): ms for a race, metres for the javelin. */
+function resultOf(g, id) {
+  if (isBot(id)) { const b = host.bots.get(id); return b ? botResult(g, b) : null; }
+  const r = cached("r:" + id, (S.entities.players[id] || {}).r, null);
+  if (!r || r.g !== g.id || r.e !== g.ev) return null;
+  return evName(g) === "javelin" ? clamp(+r.d || 0, 0, 120) : Math.max(evName(g) === "dash" ? 7500 : 8500, +r.t || 0);
+}
+function hostTick(dt, now) {
+  if (!host.wasHost) adopt();
+  const T = Date.now();
+  let g = meet();
+  if (!g) g = writeMeet(newMeet(1, T));
+  if (g.phase === "intro" && T >= g.at) g = startEvent(g, g.ev, T);
+  else if (g.phase === "race") {
+    const res = { ...g.res };
+    let changed = false;
+    for (const id of g.lanes) if (res[id] === undefined) { const v = resultOf(g, id); if (v !== null) { res[id] = Math.round(v * 10) / 10; changed = true; } }
+    if (changed) g = writeMeet({ ...g, res });
+    const live = humans();
+    const waiting = g.lanes.filter((id) => g.res[id] === undefined && (isBot(id) || live.includes(id)));
+    if (T > g.startAt && (!waiting.length || T >= g.startAt + CONFIG.capMs[evName(g)])) g = finishEvent(g, T);
+  } else if (g.phase === "result" && T >= g.at) {
+    if (g.ev + 1 < CONFIG.events.length) g = startEvent(g, g.ev + 1, T);
+    else if (ATTRACT) g = startEvent(g, 0, T); // the preview never ends
+    else g = writeMeet({ ...g, phase: "podium", at: T + CONFIG.podiumMs });
+  } else if (g.phase === "podium") {
+    const seated = g.lanes.filter((id) => !isBot(id));
+    const ready = seated.length && seated.every((id) => (id === net.sessionId ? myReady : (S.entities.players[id] || {}).rdy) === g.id);
+    if (T > g.at || ready) g = writeMeet(newMeet(g.id + 1, T));
+  }
+  if (g.phase === "race") for (const b of host.bots.values()) botTick(b, g, dt, T);
+  if (now - host.lastBots > CONFIG.botSendMs) writeBots(g);
+  if (now - host.lastClk > 500) { host.lastClk = now; net.setShared("clk", Date.now()); }
+}
+/** Everyone's place in this event, and their points. Missing results (didn't finish) go last with none. */
+function finishEvent(g, T) {
+  const jav = evName(g) === "javelin", has = g.lanes.filter((id) => g.res[id] !== undefined && !(jav && !g.res[id]));
+  has.sort((a, b) => (jav ? g.res[b] - g.res[a] : g.res[a] - g.res[b]));
+  const pts = { ...g.pts };
+  has.forEach((id, i) => { pts[id] = (pts[id] || 0) + (CONFIG.points[i] ?? 1); });
+  const place = [...has, ...g.lanes.filter((id) => !has.includes(id))];
+  return writeMeet({ ...g, phase: "result", place, pts, at: T + CONFIG.resultMs });
+}
+function writeBots(g) {
+  host.lastBots = performance.now();
+  const lane = (id) => (g ? g.lanes.indexOf(id) : 0);
+  const json = JSON.stringify([...host.bots.values()].map((b) => ({ id: b.id, x: r2(b.x), y: lane(b.id), v: r2(b.v), j: r2(b.j), s: b.s, k: b.k, an: Math.round(b.an), xr: b.xr, v0: b.v0, tt: b.tt })));
+  if (json !== host.botsJson) { host.botsJson = json; net.setShared("bots", json); }
+}
+
+// ── BOTS ────────────────────────────────────────────────────────────────────────────
+/** A bot's habits: how fast it mashes, how well it times jumps, the angle it likes. */
+function botBrain() {
+  const [lo, hi] = CONFIG.botTaps;
+  return { rate: lo + Math.random() * (hi - lo), nextTap: 0, hurdleLead: -1, aimAt: -1, wantAngle: CONFIG.botAngle + gauss() * CONFIG.botAngleErr };
+}
+function botTick(b, g, dt, T) {
+  if (T < g.startAt) return;
+  const ev = evName(g), now = T;
+  if (now >= b.nextTap && (b.s === RUN || b.s === AIR)) {
+    stepFoot(b, Math.random() < 0.03 ? b.foot : b.foot === "L" ? "R" : "L"); // now and then the same foot twice
+    b.nextTap = now + (1000 / b.rate) * (0.75 + Math.random() * 0.5);
+  }
+  if (ev === "hurdles" && b.s === RUN) { // jump when the next hurdle is about a quarter-second away (give or take)
+    const i = CONFIG.hurdles.findIndex((h) => h > b.x);
+    if (i >= 0) {
+      if (b.hurdleLead < 0 || b.hurdleFor !== i) { b.hurdleFor = i; b.hurdleLead = Math.max(0.02, 0.24 + gauss() * CONFIG.botJumpErr); }
+      if (CONFIG.hurdles[i] - b.x < b.v * b.hurdleLead) jump(b);
+    }
+  }
+  if (ev === "javelin") {
+    if (b.aimAt < 0) b.aimAt = CONFIG.foulLine - (Math.random() < 0.06 ? 1.4 : 2.6 + Math.random() * 2); // now and then it plants too late and fouls
+    if ((b.s === RUN || b.s === AIR) && b.x >= b.aimAt) startAim(b);
+    if (b.s === AIM && b.an >= b.wantAngle) release(b, T);
+  }
+  moveAthlete(b, dt, ev, T);
+}
+function botResult(g, b) {
+  const ev = evName(g);
+  if (ev === "javelin") return b.s === THROWN ? throwDist(b.v0, b.an) : b.s === FOUL ? 0 : null;
+  return b.s === DONE && b.fin ? b.fin - g.startAt : null;
+}
+
+// ── ME ──────────────────────────────────────────────────────────────────────────────
+let myName = "";
+try { myName = localStorage.getItem("mpa-name") || ""; } catch {}
+myName = myName || ["Speedy", "Zoom", "Turbo", "Swift", "Dash", "Sunny"][Math.floor(Math.random() * 6)] + " " + ["Legs", "Feet", "Runner", "Sprinter", "Hopper"][Math.floor(Math.random() * 5)];
+let myColor = COLORS[0], myReady = 0; // the color is picked on join: the first one nobody in the room has
+let me = newAthlete();
+const mine = { key: "", lastSend: 0, lastJson: "", sentResult: "", best: 0, fx: [] };
+const myLane = (g) => (g && !ATTRACT ? g.lanes.indexOf(net.sessionId) : -1);
+const racing = (g) => g && g.phase === "race" && hostNow() >= g.startAt && myLane(g) >= 0;
+function myTick(dt, g, now) {
+  const key = `${g.id}:${g.ev}:${g.phase === "race" ? "race" : "wait"}`;
+  if (key !== mine.key) { if (g.phase === "race") { me = newAthlete(); mine.sentResult = ""; } mine.key = key; }
+  if (myLane(g) < 0) return;
+  const ev = evName(g), T = hostNow();
+  if (racing(g)) {
+    const out = moveAthlete(me, dt, ev, T);
+    if (out === "knock") { sfx("clatter"); shake = 6; feedback("CLIPPED IT!", "#ff8a5a"); }
+    if (out === "foul") { sfx("buzz"); feedback("FOUL!", "#ff4d4d", "Over the line"); }
+    if (out === "finish") { sfx("tape"); }
+  }
+  sendResult(g);
+  const a = { g: g.id, e: g.ev, x: r2(me.x), v: r2(me.v), j: r2(me.j), s: me.s, k: me.k, an: Math.round(me.an), xr: me.xr, v0: me.v0, tt: me.tt };
+  const json = JSON.stringify(a);
+  if (now - mine.lastSend > CONFIG.sendMs && json !== mine.lastJson) { mine.lastSend = now; mine.lastJson = json; net.me.set("a", json); }
+}
+/** Finished, thrown or fouled: write my result once. */
+function sendResult(g) {
+  const ev = evName(g), key = `${g.id}:${g.ev}`;
+  if (mine.sentResult === key) return;
+  let r = null;
+  if (ev === "javelin" && me.s === THROWN) r = { g: g.id, e: g.ev, d: r2(throwDist(me.v0, me.an)) };
+  if (ev === "javelin" && me.s === FOUL) r = { g: g.id, e: g.ev, d: 0 };
+  if (ev !== "javelin" && me.s === DONE && me.fin) r = { g: g.id, e: g.ev, t: Math.round(me.fin - g.startAt) };
+  if (!r) return;
+  mine.sentResult = key;
+  net.me.set("r", JSON.stringify(r));
+  if (r.t) { feedback("FINISHED!", "#7cf29a", `${(r.t / 1000).toFixed(2)}s`); if (ev === "dash") submitDash(r.t); }
+  if (r.d) feedback(`${r.d.toFixed(1)} m`, "#7cf29a", `Thrown at ${Math.round(me.an)}°`);
+}
+/** Input: a step, a jump, aiming the javelin, letting it go. */
+function myFoot(foot) {
+  const g = meet();
+  if (!racing(g)) return;
+  if (stepFoot(me, foot)) { sfx("step"); dust.push({ x: me.x, lane: myLane(g), life: 0.4 }); }
+}
+function myAction(down) {
+  const g = meet();
+  if (!racing(g)) return;
+  const ev = evName(g);
+  if (ev === "hurdles" && down && jump(me)) sfx("hop");
+  if (ev === "javelin") { if (down) startAim(me); else if (me.s === AIM) { release(me, hostNow()); if (me.s === THROWN) sfx("whoosh"); else { sfx("buzz"); feedback("FOUL!", "#ff4d4d", "Let go before the red line"); } } }
+}
+
+// ── VIEWS ───────────────────────────────────────────────────────────────────────────
+const views = new Map(); // id -> another athlete, eased toward its last write
+function syncViews(g, dt) {
+  const now = performance.now(), k = 1 - Math.exp(-dt * 16), seen = new Set(), src = [];
+  for (const id of g.lanes) {
+    if (id === net.sessionId) continue;
+    if (isBot(id) && host.wasHost) continue; // the host draws its own live bots
+    if (!isBot(id)) { const raw = (S.entities.players[id] || {}).a, a = cached("a:" + id, raw, null); if (a && a.g === g.id && a.e === g.ev) src.push([id, raw, a]); }
+  }
+  if (!host.wasHost) { const raw = S.shared.bots, list = cached("bots", raw, []); for (const b of Array.isArray(list) ? list : []) if (g.lanes.includes(b.id)) src.push([b.id, raw, b]); }
+  for (const [id, raw, a] of src) {
+    seen.add(id);
+    let v = views.get(id);
+    if (!v || raw !== v.raw && a.x < v.x - 5) { v = { ...newAthlete(), ...a, raw: null, at: now, tx: a.x }; views.set(id, v); } // new, or a new event: jump there
+    if (raw !== v.raw) { Object.assign(v, { ...a, x: v.x, raw, at: now, tx: a.x }); }
+    const ahead = Math.min(0.15, (now - v.at) / 1000);
+    v.x += (v.tx + v.v * ahead - v.x) * k;
+  }
+  for (const id of views.keys()) if (!seen.has(id)) views.delete(id);
+}
+/** An athlete as this screen sees it. */
+function athleteOf(id) {
+  if (id === net.sessionId && !ATTRACT) return me;
+  if (isBot(id) && host.wasHost) return host.bots.get(id) || null;
+  return views.get(id) || null;
+}
+
+// ── DRAW ────────────────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const cv = $("game"), ctx = cv.getContext("2d");
+const touchUI = matchMedia("(pointer: coarse)").matches && !ATTRACT;
+let W = 0, H = 0, DPR = 1, LY = {}, camX = 0, viewM = 24, shake = 0;
+function fit() {
+  DPR = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  const portrait = H > W, padB = touchUI ? 150 : 34;
+  const top = Math.round(H * (portrait ? 0.3 : 0.36)), bottom = H - padB - (portrait ? 40 : 10);
+  LY = { portrait, top, bottom, standTop: Math.round(top * 0.42) };
+  $("hint").style.top = bottom + (touchUI ? 26 : 6) + "px";
+}
+addEventListener("resize", fit); addEventListener("orientationchange", fit);
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const crowd = (() => { const r = mulberry32(3), out = []; for (let i = 0; i < 260; i++) out.push({ x: r() * 900, row: Math.floor(r() * 5), c: ["#ff5d8f", "#ffd23f", "#3a86ff", "#ffffff", "#06d6a0", "#ff9f1c", "#b388ff"][Math.floor(r() * 7)], ph: r() * 6.3 }); return out; })();
+const dust = [], confetti = [];
+let cheer = 0;
+const sx = (m) => (m - camX) * (W / viewM); // metres to screen x
+function laneBox(i, n) { const h = Math.min(70, (LY.bottom - LY.top) / n); const y0 = LY.top + ((LY.bottom - LY.top) - h * n) / 2; return { y: y0 + i * h, h }; }
+function draw(g, dt, now) {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const ev = evName(g), n = g.lanes.length, T = hostNow();
+  // the camera: on me, or on the leader; out wide to follow a javelin
+  const focusId = myLane(g) >= 0 ? net.sessionId : leaderOf(g), fa = athleteOf(focusId), jav = ev === "javelin" ? javelinAt(fa, T) : null;
+  const wantView = (ATTRACT ? 16 : clamp(W / 38, 14, 30)) * (jav ? 3 : 1), fx = jav ? jav.x : fa ? fa.x : 0;
+  viewM += (wantView - viewM) * (1 - Math.exp(-dt * 3));
+  const wantCam = fx - viewM * (jav ? 0.5 : 0.32);
+  camX += (Math.max(-viewM * 0.2, wantCam) - camX) * (1 - Math.exp(-dt * 6));
+  shake *= Math.exp(-dt * 10);
+  const oy = (Math.random() - 0.5) * shake;
+  // sky, sun, clouds
+  const sky = ctx.createLinearGradient(0, 0, 0, LY.top); sky.addColorStop(0, "#5ab4f0"); sky.addColorStop(1, "#bfe6ff");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, LY.top);
+  ctx.fillStyle = "#fff6c9"; ctx.beginPath(); ctx.arc(W * 0.85, LY.standTop * 0.6, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#ffffffcc";
+  for (const [cx, cy, s] of [[0.15, 0.3, 1], [0.5, 0.18, 0.8], [0.8, 0.36, 1.1]]) { const x = ((cx * W - camX * 2 + 4000) % (W + 200)) - 100, y = LY.standTop * cy; for (const [dx, dy, r] of [[0, 0, 22], [24, 5, 17], [-22, 5, 15], [8, -10, 17]]) { ctx.beginPath(); ctx.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2); ctx.fill(); } }
+  // the stands, scrolling slower than the track, with a crowd that jumps when someone finishes
+  cheer = Math.max(0, cheer - dt * 0.5);
+  const sh = LY.top - LY.standTop;
+  ctx.fillStyle = "#2c3e66"; ctx.fillRect(0, LY.standTop, W, sh);
+  for (let r = 0; r < 5; r++) { ctx.fillStyle = r % 2 ? "#34497a" : "#2f4370"; ctx.fillRect(0, LY.standTop + (r * sh * 0.8) / 5 + 4, W, (sh * 0.8) / 5); }
+  const par = camX * (W / viewM) * 0.35;
+  for (const f of crowd) {
+    const x = ((f.x * 2 - par) % 900 + 900) % 900;
+    for (let tile = 0; tile < W; tile += 900) {
+      const y = LY.standTop + 6 + (f.row * sh * 0.8) / 5 - Math.max(0, Math.sin(now / 160 + f.ph)) * (1 + cheer * 6);
+      ctx.fillStyle = f.c; ctx.fillRect(tile + x, y + 4, 6, 7); ctx.fillStyle = "#f1c9a5"; ctx.fillRect(tile + x + 1, y, 4, 4);
+    }
+  }
+  ctx.fillStyle = "#1d6e3a"; ctx.fillRect(0, LY.top - sh * 0.2, W, sh * 0.2); // the infield wall
+  ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui, sans-serif"; ctx.textAlign = "left";
+  for (let m = Math.floor(camX / 25) * 25; m < camX + viewM; m += 25) ctx.fillText(EVENTS[ev].name, sx(m), LY.top - sh * 0.07);
+  // the lanes
+  ctx.save(); ctx.translate(0, oy);
+  const box0 = laneBox(0, n), boxN = laneBox(n - 1, n);
+  ctx.fillStyle = "#3f9b4f"; ctx.fillRect(0, LY.top, W, H - LY.top);
+  for (let i = 0; i < n; i++) {
+    const b = laneBox(i, n);
+    ctx.fillStyle = i % 2 ? "#c8553d" : "#d05f45"; ctx.fillRect(0, b.y, W, b.h);
+    if (ev === "javelin") { const fl = sx(CONFIG.foulLine); ctx.fillStyle = i % 2 ? "#4aa65a" : "#52ad61"; ctx.fillRect(Math.max(0, fl), b.y, W, b.h); }
+    if (g.lanes[i] === net.sessionId && !ATTRACT) { ctx.fillStyle = "#ffffff18"; ctx.fillRect(0, b.y, W, b.h); }
+  }
+  ctx.strokeStyle = "#ffffffcc"; ctx.lineWidth = 2;
+  for (let i = 0; i <= n; i++) { const y = i < n ? laneBox(i, n).y : boxN.y + boxN.h; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // distance marks, start and finish
+  ctx.fillStyle = "#ffffffaa"; ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center";
+  const step = ev === "javelin" && viewM > 40 ? 20 : 10;
+  for (let m = Math.ceil(camX / step) * step; m < camX + viewM; m += step) {
+    const x = sx(m);
+    ctx.fillStyle = "#ffffff44"; ctx.fillRect(x - 1, box0.y, 2, boxN.y + boxN.h - box0.y);
+    ctx.fillStyle = "#ffffffcc"; ctx.fillText(ev === "javelin" && m > CONFIG.foulLine ? `${m - CONFIG.foulLine}m` : `${m}m`, x, boxN.y + boxN.h + 14);
+  }
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(sx(0) - 2, box0.y, 4, boxN.y + boxN.h - box0.y); // the start line
+  if (ev === "javelin") { ctx.fillStyle = "#ff3b3b"; ctx.fillRect(sx(CONFIG.foulLine) - 3, box0.y, 6, boxN.y + boxN.h - box0.y); }
+  else { const x = sx(CONFIG.trackLen); for (let y = box0.y, k = 0; y < boxN.y + boxN.h; y += 6, k++) { ctx.fillStyle = k % 2 ? "#111" : "#fff"; ctx.fillRect(x - 6, y, 6, 6); ctx.fillStyle = k % 2 ? "#fff" : "#111"; ctx.fillRect(x, y, 6, 6); } }
+  // athletes, back lane first; hurdles drawn in each lane with the ones that athlete knocked over
+  for (let i = 0; i < n; i++) {
+    const id = g.lanes[i], b = laneBox(i, n), a = athleteOf(id), ground = b.y + b.h * 0.86, size = Math.min(b.h * (LY.portrait ? 1.2 : 1.5), 96);
+    if (ev === "hurdles") CONFIG.hurdles.forEach((h, k) => drawHurdle(sx(h), ground, size, a && (a.k & (1 << k))));
+    ctx.fillStyle = "#ffffffd0"; ctx.font = `900 ${Math.round(b.h * 0.42)}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.fillText(String(i + 1), sx(-2), b.y + b.h * 0.66);
+    if (!a) continue;
+    const before = g.phase === "race" && T < g.startAt;
+    drawAthlete(sx(a.x), ground - (a.j || 0) * size * 0.9, size, colorOf(id), a, before, id === net.sessionId && !ATTRACT);
+    const j = ev === "javelin" ? javelinAt(a, T) : null;
+    if (j) drawJavelin(sx(j.x), ground - j.y * size * 0.32, size, -j.ang * 0.6);
+    if (j && j.landed) { ctx.fillStyle = "#fff"; ctx.font = "800 12px system-ui, sans-serif"; ctx.fillText(`${throwDist(a.v0, a.an).toFixed(1)}m`, sx(j.x), ground - size * 0.5); }
+    if (!ATTRACT) { ctx.font = "800 11px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = id === net.sessionId ? "#ffd23f" : "#ffffff"; ctx.fillText(id === net.sessionId ? "You" : nameOf(id), sx(a.x) + size * 0.3, b.y + 12); }
+  }
+  for (let i = dust.length - 1; i >= 0; i--) { const d = dust[i]; d.life -= dt; if (d.life <= 0) { dust.splice(i, 1); continue; } const b = laneBox(d.lane, n); ctx.fillStyle = `rgba(255,230,200,${d.life * 1.5})`; ctx.beginPath(); ctx.arc(sx(d.x) - 8 - (0.4 - d.life) * 30, b.y + b.h * 0.86, 3 + (0.4 - d.life) * 10, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  for (let i = confetti.length - 1; i >= 0; i--) { const c = confetti[i]; c.life -= dt; c.vy += 300 * dt; c.x += c.vx * dt; c.y += c.vy * dt; if (c.life <= 0 || c.y > H) { confetti.splice(i, 1); continue; } ctx.fillStyle = c.c; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.life * 8); ctx.fillRect(-4, -2, 8, 4); ctx.restore(); }
+  drawStrip(g, ev, T);
+}
+/** A runner side-on, facing right: legs and arms swing with distance; crouched before the gun; tucked in the air. */
+function drawAthlete(x, ground, size, color, a, crouch, mine) {
+  const s = size / 60, ph = (a.x || 0) * 2.3, air = a.s === AIR || (a.j || 0) > 0.05;
+  ctx.save(); ctx.translate(x, ground); ctx.scale(s, s);
+  ctx.fillStyle = "#0003"; ctx.beginPath(); ctx.ellipse(0, 2 + (a.j || 0) * 48, 14, 3, 0, 0, Math.PI * 2); ctx.fill();
+  if (mine) { ctx.strokeStyle = "#ffd23f"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(0, 2 + (a.j || 0) * 48, 18, 5, 0, 0, Math.PI * 2); ctx.stroke(); }
+  const lean = crouch ? 0.9 : Math.min(0.45, (a.v || 0) / 25), hip = { x: 0, y: crouch ? -20 : -26 };
+  const sw = air ? 0 : Math.sin(ph) * Math.min(1, (a.v || 0) / 4);
+  const leg = (ang, knee) => { const k = { x: hip.x + Math.sin(ang) * 13, y: hip.y + Math.cos(ang) * 13 }; ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(k.x, k.y); ctx.lineTo(k.x + Math.sin(ang - knee) * 13, k.y + Math.cos(ang - knee) * 13); ctx.stroke(); };
+  ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 5; ctx.strokeStyle = "#7a4a2c";
+  if (air) { leg(1.3, 1.6); leg(-0.6, -0.4); } else if (crouch) { leg(1.2, 2.2); leg(-0.2, 1.4); } else { leg(sw * 0.9, 0.6 + Math.max(0, -sw)); leg(-sw * 0.9, 0.6 + Math.max(0, sw)); }
+  const shoulder = { x: hip.x + Math.sin(lean) * 22, y: hip.y - Math.cos(lean) * 22 };
+  ctx.strokeStyle = color; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(hip.x, hip.y); ctx.lineTo(shoulder.x, shoulder.y); ctx.stroke();
+  ctx.lineWidth = 4.5; ctx.strokeStyle = "#7a4a2c";
+  if (a.s === AIM) { ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(shoulder.x - 10, shoulder.y - 8); ctx.stroke(); drawJavelin(shoulder.x - 8, shoulder.y - 8, 60, -((a.an || 0) * Math.PI) / 180, true); }
+  else for (const k of [1, -1]) { const ang = air ? -2 * k : -sw * 1.1 * k; ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(shoulder.x + Math.sin(ang) * 12, shoulder.y + Math.cos(ang) * 12); ctx.lineTo(shoulder.x + Math.sin(ang) * 12 + 7, shoulder.y + Math.cos(ang) * 12 - 3); ctx.stroke(); }
+  ctx.fillStyle = "#7a4a2c"; ctx.beginPath(); ctx.arc(shoulder.x + 4, shoulder.y - 8, 7.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color; ctx.fillRect(shoulder.x - 2, shoulder.y - 16, 12, 3.5); // headband
+  ctx.restore();
+}
+function drawHurdle(x, ground, size, down) {
+  if (x < -40 || x > W + 40) return;
+  const s = size / 60;
+  ctx.save(); ctx.translate(x, ground); ctx.scale(s, s);
+  if (down) ctx.rotate(1.25);
+  ctx.fillStyle = "#0002"; ctx.fillRect(-2, -1, 14, 3);
+  ctx.strokeStyle = "#f4f4f4"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -24); ctx.moveTo(-4, 0); ctx.lineTo(6, 0); ctx.stroke();
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(-4, -30, 9, 9); ctx.fillStyle = "#1b1b1b"; ctx.fillRect(-4, -27, 9, 3); // the bar, end-on
+  ctx.restore();
+}
+function drawJavelin(x, y, size, ang, held) {
+  const s = size / 60, len = 46 * s;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(held ? ang : ang); ctx.strokeStyle = "#d9d9d9"; ctx.lineWidth = 2.5 * Math.max(0.6, s); ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+  ctx.strokeStyle = "#e8453c"; ctx.beginPath(); ctx.moveTo(len / 2 - 6 * s, 0); ctx.lineTo(len / 2, 0); ctx.stroke(); ctx.restore();
+}
+/** The thin strip above the lanes: where everyone is out of the whole 100m (or how far each javelin went). */
+function drawStrip(g, ev, T) {
+  const x0 = 16, x1 = W - 16, y = LY.top - 10, len = ev === "javelin" ? 100 : CONFIG.trackLen;
+  ctx.fillStyle = "#13294bb0"; ctx.fillRect(x0 - 6, y - 7, x1 - x0 + 12, 14);
+  g.lanes.forEach((id) => {
+    const a = athleteOf(id); if (!a) return;
+    let m = a.x; if (ev === "javelin") { const j = javelinAt(a, T); m = j ? j.x - CONFIG.foulLine : 0; }
+    const x = x0 + clamp(m / len, 0, 1) * (x1 - x0);
+    ctx.fillStyle = colorOf(id); ctx.beginPath(); ctx.arc(x, y, id === net.sessionId ? 6 : 4.5, 0, Math.PI * 2); ctx.fill();
+    if (id === net.sessionId && !ATTRACT) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); }
+  });
+}
+function leaderOf(g) { let best = g.lanes[0], bx = -1; for (const id of g.lanes) { const a = athleteOf(id), j = a && evName(g) === "javelin" ? javelinAt(a, hostNow()) : null, x = j ? j.x : a ? a.x : 0; if (x > bx) { bx = x; best = id; } } return best; }
+/** Bots wear the colors nobody here is using. */
+function colorOf(id) {
+  if (id === net.sessionId) return myColor;
+  if (!isBot(id)) return (S.entities.players[id] || {}).c || "#dddddd";
+  const used = Object.entries(S.entities.players || {}).map(([pid, p]) => (pid === net.sessionId ? myColor : p.c));
+  const free = COLORS.filter((c) => !used.includes(c));
+  return free[(+id.slice(1) - 1) % free.length] || "#cccccc";
+}
+function burst(n) { for (let i = 0; i < n; i++) confetti.push({ x: Math.random() * W, y: -10 - Math.random() * 80, vx: (Math.random() - 0.5) * 120, vy: Math.random() * 60, life: 2 + Math.random() * 1.5, c: COLORS[i % COLORS.length] }); }
+
+// Sounds, made on the fly with WebAudio (no files).
+let audio = null;
+function unlockAudio() { if (!audio && !ATTRACT) try { audio = new AudioContext(); } catch {} }
+function blip(type, f0, f1, len, vol, at = 0) {
+  const t = audio.currentTime + at, o = audio.createOscillator(), gain = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len);
+  gain.gain.setValueAtTime(vol, t); gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+  o.connect(gain).connect(audio.destination); o.start(t); o.stop(t + len + 0.02);
+}
+function sfx(kind) {
+  if (!audio) return;
+  if (kind === "step") blip("triangle", 180 + Math.random() * 40, 90, 0.05, 0.12);
+  if (kind === "hop") blip("sine", 300, 700, 0.12, 0.12);
+  if (kind === "clatter") { blip("square", 400, 120, 0.15, 0.1); blip("square", 260, 90, 0.2, 0.08, 0.06); }
+  if (kind === "beep") blip("sine", 660, 660, 0.15, 0.15);
+  if (kind === "gun") { blip("sawtooth", 900, 60, 0.25, 0.3); blip("square", 120, 40, 0.3, 0.2); }
+  if (kind === "tape") [523, 659, 784].forEach((f, i) => blip("triangle", f, f, 0.18, 0.12, i * 0.09));
+  if (kind === "whoosh") blip("sawtooth", 900, 200, 0.4, 0.06);
+  if (kind === "buzz") blip("sawtooth", 140, 110, 0.4, 0.15);
+  if (kind === "medal") [523, 659, 784, 1046].forEach((f, i) => blip("triangle", f, f, 0.3, 0.12, i * 0.14));
+}
+
+// ── HUD & RESULTS ───────────────────────────────────────────────────────────────────
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let board = null, boardFor = -1, msgUntil = 0, dropped = false, lastCd = "", seenPhase = "";
+const startedAt = performance.now();
+function feedback(text, color, sub = "") { $("msg").innerHTML = `<span style="color:${color}">${esc(text)}</span>${sub ? `<small>${esc(sub)}</small>` : ""}`; msgUntil = performance.now() + 1800; }
+const fmt = (g, v) => (evName(g) === "javelin" ? (v ? `${v.toFixed(1)}m` : "foul") : `${(v / 1000).toFixed(2)}s`);
+function hud(g, now) {
+  const T = hostNow(), ev = evName(g), lane = myLane(g), K = CONFIG;
+  $("msg").classList.toggle("on", now < msgUntil);
+  $("title").textContent = g.phase === "podium" ? "MEDALS" : g.phase === "intro" ? "FIELD DAY" : EVENTS[ev].name;
+  $("sub").textContent = g.phase === "intro" ? "3 events · points for every finish · medals at the end" : g.phase === "podium" ? "" : `Event ${g.ev + 1} of ${K.events.length}`;
+  // the countdown and the gun
+  let cd = "";
+  if (g.phase === "race") { const left = g.startAt - T; cd = left > 0 ? String(Math.ceil(left / 1000)) : left > -700 ? "GO!" : ""; }
+  $("cd").textContent = cd; $("cd").classList.toggle("on", !!cd);
+  if (cd !== lastCd) { if (cd === "GO!") { sfx("gun"); cheer = 1; } else if (cd) sfx("beep"); lastCd = cd; }
+  const pk = `${g.id}:${g.phase}:${g.ev}`;
+  if (pk !== seenPhase) { seenPhase = pk; if (g.phase === "result") { cheer = 1.5; burst(30); } if (g.phase === "podium") { burst(120); sfx("medal"); } }
+  const running = g.phase === "race" && T >= g.startAt;
+  $("clock").textContent = running ? (ev === "javelin" ? "" : ((Math.min(T, g.startAt + K.capMs[ev]) - g.startAt) / 1000).toFixed(1)) : "";
+  if (ATTRACT) { for (const id of ["net", "hint", "pads", "res", "over", "clock", "msg"]) $(id).hidden = true; $("net").textContent = ""; return; }
+  // controls
+  $("pads").hidden = !touchUI || lane < 0 || g.phase !== "race";
+  $("bAct").hidden = ev === "dash"; $("bAct").textContent = ev === "javelin" ? "THROW" : "JUMP";
+  $("hint").textContent = lane < 0 ? "The lanes are full: you're in the next event." : g.phase === "race" ? (touchUI ? EVENTS[ev].touch : EVENTS[ev].hint) : "";
+  $("hint").style.opacity = lane < 0 || (g.phase === "race" && (T < g.startAt + 4000 || now - startedAt < 15000)) ? 1 : 0;
+  const n = livePlayers().length;
+  $("net").textContent = net.offline ? "Offline: playing with bots" : dropped ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the meet" : ""}`;
+  // this event's results
+  $("res").hidden = g.phase !== "result";
+  if (g.phase === "result") {
+    $("resTitle").textContent = `${EVENTS[ev].name} RESULTS`;
+    $("resList").innerHTML = g.place.map((id, i) => { const v = g.res[id], got = v !== undefined && !(ev === "javelin" && !v), p = got ? (K.points[i] ?? 1) : 0;
+      return `<li class="${id === net.sessionId ? "me" : ""}"><b style="color:${colorOf(id)}">●</b> ${esc(id === net.sessionId ? "You" : nameOf(id))}<span>${got ? fmt(g, v) : v === 0 ? "foul" : "DNF"}<em>+${p}</em></span></li>`; }).join("");
+  }
+  // the medal card
+  const card = g.phase === "podium" && T > g.at - K.podiumMs + 1200;
+  $("over").hidden = !card;
+  if (!card) return;
+  const order = [...g.lanes].sort((a, b) => (g.pts[b] || 0) - (g.pts[a] || 0)), top = order.slice(0, 3), myPlace = order.indexOf(net.sessionId);
+  $("winner").textContent = myPlace === 0 ? "Gold! You win the meet!" : myPlace === 1 ? "Silver for you!" : myPlace === 2 ? "Bronze for you!" : `${nameOf(order[0])} takes gold!`;
+  $("winner").style.color = myPlace >= 0 && myPlace < 3 ? MEDALS[myPlace] : "#fff";
+  const col = (i) => top[i] ? `<div><i style="background:${colorOf(top[i])}"></i><b>${esc(top[i] === net.sessionId ? "You" : nameOf(top[i]))}</b><span style="background:${MEDALS[i]};height:${[80, 58, 42][i]}px">${i + 1}</span></div>` : "<div></div>";
+  $("podium").innerHTML = col(1) + col(0) + col(2);
+  $("totals").innerHTML = `<tr><th>Athlete</th><th>Points</th></tr>` + order.map((id) => `<tr class="${id === net.sessionId ? "me" : ""}"><td><i style="background:${colorOf(id)}"></i>${esc(id === net.sessionId ? "You" : nameOf(id))}</td><td>${g.pts[id] || 0}</td></tr>`).join("");
+  $("again").hidden = lane < 0;
+  $("again").textContent = myReady === g.id ? "Waiting for the others…" : "Play again";
+  $("next").textContent = `Next meet in ${Math.max(0, Math.ceil((g.at - T) / 1000))}s`;
+  if (boardFor !== g.id) { boardFor = g.id; showBoard(); }
+}
+function submitDash(ms) { if (board && ms > 0) board.submit(Math.max(0, 100000 - ms)).catch(() => {}); }
+function showBoard() {
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li>Loading…</li>";
+  board.top(10).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${((100000 - e.score) / 1000).toFixed(2)}s</span></li>`).join("") : "<li>No times yet. Set the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+$("again").onclick = () => { const g = meet(); if (g && g.phase === "podium") { myReady = g.id; net.me.set("rdy", g.id); } };
+/** Two players picked the same color at once (the joiner's first state can be empty): the later sessionId picks again. */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId);
+  if (!others.some(([id, p]) => p.c === myColor && id < net.sessionId)) return;
+  const taken = new Set(others.map(([, p]) => p.c));
+  myColor = COLORS.find((c) => !taken.has(c)) || myColor; net.me.set("c", myColor);
+}
+
+// ── INPUT ───────────────────────────────────────────────────────────────────────────
+const LEFT = ["arrowleft", "a", "z"], RIGHT = ["arrowright", "d", "x"], ACT = [" ", "arrowup", "w", "enter"];
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase(); unlockAudio();
+  if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(k)) e.preventDefault();
+  if (e.repeat) return;
+  if (LEFT.includes(k)) myFoot("L");
+  if (RIGHT.includes(k)) myFoot("R");
+  if (ACT.includes(k)) myAction(true);
+});
+addEventListener("keyup", (e) => { if (ACT.includes(e.key.toLowerCase())) myAction(false); });
+cv.addEventListener("pointerdown", (e) => { e.preventDefault(); unlockAudio(); if (e.pointerType !== "mouse") myFoot(e.clientX < W / 2 ? "L" : "R"); }); // tapping the track works too
+function pad(el, down, up) {
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); unlockAudio(); el.setPointerCapture(e.pointerId); el.classList.add("on"); down(); });
+  for (const ev of ["pointerup", "pointercancel"]) el.addEventListener(ev, () => { el.classList.remove("on"); if (up) up(); });
+}
+pad($("bL"), () => myFoot("L")); pad($("bR"), () => myFoot("R")); pad($("bAct"), () => myAction(true), () => myAction(false));
+document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+let last = performance.now(), lastHb = 0, lastHud = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const t0 = performance.now(); // not `now`: the first frame after a freeze can be stamped from before it ended
+  if (frameAt && t0 - frameAt > 1000) { wokeAt = t0; host.wasHost = false; host.last = null; } // woke from a stall: drop my host copy, adopt state again (see isHost)
+  frameAt = t0;
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; // the first frame can be stamped before `last`
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
+  noteHostClock();
+  if (isHost()) hostTick(dt, now); else host.wasHost = false;
+  const g = meet();
+  if (g) {
+    myTick(dt, g, now);
+    syncViews(g, dt);
+    draw(g, dt, now);
+    if (now - lastHud > 90) { lastHud = now; hud(g, now); }
+  }
+}
+
+(function start() {
+  fit();
+  connect().then((m) => {
+    net = m;
+    net.onState((st) => { S = st; });
+    net.onDisconnect(() => { dropped = true; $("net").textContent = "Reconnecting…"; });
+    net.onReconnect(() => { dropped = false; });
+    if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+    const taken = new Set(Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c));
+    myColor = COLORS.find((c) => !taken.has(c)) || COLORS[Math.floor(Math.random() * COLORS.length)];
+    net.me.set({ n: myName, c: myColor, hb: Date.now() });
+    if (ATTRACT) Object.assign(CONFIG, { introMs: 300, countdownMs: 1000, resultMs: 1500, botTaps: [9.3, 10.1] }); // the preview: a tight pack
+    window.__fd = () => ({ g: meet(), host: isHost(), me: { ...me }, id: net.sessionId, lane: myLane(meet()), step: myFoot, act: myAction }); // for test scripts
+    requestAnimationFrame(frame);
+  });
+})();
+</script>
+</body>
+</html>

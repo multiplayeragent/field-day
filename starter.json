@@ -1,0 +1,21 @@
+{
+  "name": "Field Day",
+  "genre": "sports",
+  "dim": "2D",
+  "mode": "Party",
+  "players": "2–8",
+  "hook": "Mash your way to gold in three quick events.",
+  "how": "A sprint, the hurdles and the javelin, lane by lane. Alternate two keys (or two buttons) as fast as you can to run, jump the hurdles on time, and hold to raise the javelin before the line. Medals go to the most points after all three.",
+  "controls": "← → (or A D) alternately to run, Space to jump or hold-and-release to throw · touch: L and R buttons, JUMP / THROW",
+  "uses": [
+    ["Host-run rounds", "The host's browser starts each event, collects every time and throw, and hands out the points; if it leaves, the next player takes over."],
+    ["Bots", "Bots fill the empty lanes and mash at human speeds, so even alone you race a full field."],
+    ["Leaderboard", "Your fastest 100m dash."],
+    ["Live sync", "Every runner moves in its lane on everyone's screen."]
+  ],
+  "ideas": [
+    "Add a long jump as a fourth event",
+    "Make it a moon base with low gravity hurdles",
+    "Give a speed boost for a perfect hurdle jump"
+  ]
+}
